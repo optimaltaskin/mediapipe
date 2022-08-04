@@ -64,9 +64,6 @@ absl::Status RunMPPGraph() {
   MP_RETURN_IF_ERROR(graph.SetGpuResources(std::move(gpu_resources)));
   mediapipe::GlCalculatorHelper gpu_helper;
   gpu_helper.InitializeForTest(graph.GetGpuResources().get());
-
-  LOG(INFO) << "Initialize the camera or load the video.";
-  cv::VideoCapture capture;
   const bool load_video = !absl::GetFlag(FLAGS_input_video_path).empty();
   if (load_video) {
     capture.open(absl::GetFlag(FLAGS_input_video_path));
