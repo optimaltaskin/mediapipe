@@ -10,8 +10,6 @@ input_stream: "input_video"
 # If `selected_effect_id` is `2`, the Glasses effect is selected.
 #
 # No other values are allowed for `selected_effect_id`.
-input_stream: "selected_effect_id"
-
 # Indicates whether to use the face detection as the input source. (bool)
 #
 # If `true`, the face detection pipeline will be used to produce landmarks.
@@ -39,7 +37,19 @@ output_stream: "multi_face_geometry"
 # real-time mobile applications. It also eliminates unnecessarily computation,
 # e.g., the output produced by a node may get dropped downstream if the
 # subsequent nodes are still busy processing previous inputs.
+
+profiler_config {
+  trace_enabled: true
+  enable_profiler: true
+  trace_log_count: 5
+  trace_log_interval_count: 200
+  histogram_interval_size_usec: 100
+  enable_stream_latency: true
+  trace_log_path: "/home/patroclos/Mediapipe/mediapipe/profiler/"
+}
+
 node {
+
   calculator: "FlowLimiterCalculator"
   input_stream: "input_video"
   input_stream: "FINISHED:output_video"
@@ -52,6 +62,7 @@ node {
 
 # Generates an environment that describes the current virtual scene.
 node {
+
   calculator: "FaceGeometryEnvGeneratorCalculator"
   output_side_packet: "ENVIRONMENT:environment"
   node_options: {
@@ -71,6 +82,7 @@ node {
 # Computes the face geometry for a single face. The input source is defined
 # through `use_face_detection_input_source`.
 node {
+
   calculator: "SwitchContainer"
   input_stream: "IMAGE:throttled_input_video"
   input_side_packet: "ENABLE:use_face_detection_input_source"
@@ -90,50 +102,17 @@ node {
 
 # Renders the selected effect based on `selected_effect_id`.
 node {
-  calculator: "SwitchContainer"
-  input_stream: "SELECT:selected_effect_id"
+
+  calculator: "FaceGeometryEffectRendererCalculator"
+  input_side_packet: "ENVIRONMENT:environment"
   input_stream: "IMAGE_GPU:throttled_input_video"
   input_stream: "MULTI_FACE_GEOMETRY:multi_face_geometry"
-  input_side_packet: "ENVIRONMENT:environment"
   output_stream: "IMAGE_GPU:output_video"
   node_options: {
-    [type.googleapis.com/mediapipe.SwitchContainerOptions] {
-      contained_node: {
-        calculator: "FaceGeometryEffectRendererCalculator"
-        node_options: {
-          [type.googleapis.com/mediapipe.FaceGeometryEffectRendererCalculatorOptions] {
-            effect_texture_path: "mediapipe/graphs/face_effect/data/axis.pngblob"
-            effect_mesh_3d_path: "mediapipe/graphs/face_effect/data/axis.binarypb"
-          }
-        }
-      }
-      contained_node: {
-        calculator: "FaceGeometryEffectRendererCalculator"
-        node_options: {
-          [type.googleapis.com/mediapipe.FaceGeometryEffectRendererCalculatorOptions] {
-            effect_texture_path: "mediapipe/graphs/face_effect/data/facepaint.pngblob"
-          }
-        }
-      }
-      contained_node: {
-        calculator: "FaceGeometryEffectRendererCalculator"
-        node_options: {
-          [type.googleapis.com/mediapipe.FaceGeometryEffectRendererCalculatorOptions] {
-            effect_texture_path: "mediapipe/graphs/face_effect/data/glasses.pngblob"
-            effect_mesh_3d_path: "mediapipe/graphs/face_effect/data/glasses.binarypb"
-          }
-        }
-      }
+    [type.googleapis.com/mediapipe.FaceGeometryEffectRendererCalculatorOptions] {
+      effect_texture_path: "mediapipe/graphs/face_custom/data/eyepatch.pngblob"
+      effect_mesh_3d_path: "mediapipe/graphs/face_custom/data/eyepatch.binarypb"
     }
   }
 }
 
-profiler_config {
-  trace_enabled: true
-  enable_profiler: true
-  trace_log_count: 5
-  trace_log_interval_count: 200
-  histogram_interval_size_usec: 100
-  enable_stream_latency: true
-  trace_log_path: "/home/patroclos/Mediapipe/mediapipe/profiler/"
-}

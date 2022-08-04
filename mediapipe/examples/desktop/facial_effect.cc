@@ -19,6 +19,7 @@
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
 #include "mediapipe/framework/calculator_framework.h"
+#include "mediapipe/framework/calculator_base.h"
 #include "mediapipe/framework/formats/image_frame.h"
 #include "mediapipe/framework/formats/image_frame_opencv.h"
 #include "mediapipe/framework/port/file_helpers.h"
@@ -31,9 +32,46 @@
 #include "mediapipe/gpu/gpu_buffer.h"
 #include "mediapipe/gpu/gpu_shared_data_internal.h"
 
+#define VERSION 1.3 
+namespace mediapipe{
+
+class FlowLimiterCalculator : public CalculatorBase {
+ public:
+  static absl::Status GetContract(CalculatorContract* cc) {
+    LOG(INFO) << "Getcontract is called!";
+    // cc->Inputs().Index(0).SetAny();
+    // SetAny() is used to specify that whatever the type of the
+    // stream is, it's acceptable.  This does not mean that any
+    // packet is acceptable.  Packets in the stream still have a
+    // particular type.  SetAny() has the same effect as explicitly
+    // setting the type to be the stream's type.
+    // cc->Inputs().Tag("IMAGE").Set<ImageFrame>();
+    return absl::OkStatus();
+    }
+    static absl::Status Open(CalculatorContract* cc) {
+      LOG(INFO) << "Open calculator node is called!";
+      return absl::OkStatus();
+    }
+  };
+}
+  // MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
+  //       "selected_effect_id", MakePacket<std::int>(2).At(Timestamp(i)
+  // MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
+  //       faceDetFlag, MakePacket<std::bool>(false).At(Timestamp(i)
+  // auto effect_id =  mediapipe::MakePacket<int32_t>(2);
+  // Packet face_det_flag = processor.getPacketCreator().createBool(false);
+  // auto timestamp_us =
+  //       (double)cv::getTickCount() / (double)cv::getTickFrequency() * 1e6;
+  // auto status = graph->AddPacketToInputStream("selected_effect_id",
+  //                                             effect_id.At(mediapipe::Timestamp(timestamp_us)));
+  // auto status = graph->AddPacketToInputStream("use_face_detection_input_source",
+  //                                             face_det_flag.At(mediapipe::Timestamp(timestamp_us)));
+
+
 constexpr char kInputStream[] = "input_video";
 constexpr char kOutputStream[] = "output_video";
 constexpr char kWindowName[] = "MediaPipe";
+constexpr char faceDetFlag[] = "use_face_detection_input_source";
 
 ABSL_FLAG(std::string, calculator_graph_config_file, "",
           "Name of file containing text format CalculatorGraphConfig proto.");
@@ -45,6 +83,7 @@ ABSL_FLAG(std::string, output_video_path, "",
           "If not provided, show result in a window.");
 
 absl::Status RunMPPGraph() {
+
   std::string calculator_graph_config_contents;
   MP_RETURN_IF_ERROR(mediapipe::file::GetContents(
       absl::GetFlag(FLAGS_calculator_graph_config_file),
@@ -54,8 +93,8 @@ absl::Status RunMPPGraph() {
   mediapipe::CalculatorGraphConfig config =
       mediapipe::ParseTextProtoOrDie<mediapipe::CalculatorGraphConfig>(
           calculator_graph_config_contents);
-
   LOG(INFO) << "Initialize the calculator graph.";
+  LOG(INFO) << "Version " << VERSION;
   mediapipe::CalculatorGraph graph;
   MP_RETURN_IF_ERROR(graph.Initialize(config));
 
@@ -91,12 +130,15 @@ absl::Status RunMPPGraph() {
                    graph.AddOutputStreamPoller(kOutputStream));
   MP_RETURN_IF_ERROR(graph.StartRun({}));
 
-  LOG(INFO) << "Start grabbing and processing frames.";
+  LOG(INFO) << "Start grabbing and processing frames. bla bla";
   bool grab_frames = true;
   while (grab_frames) {
     // Capture opencv camera or video frame.
+    LOG(INFO) << "Trying to capture frames.";
     cv::Mat camera_frame_raw;
+    LOG(INFO) << "cv::Mat command ran.";
     capture >> camera_frame_raw;
+    LOG(INFO) << "Checking if captured anything...";
     if (camera_frame_raw.empty()) {
       if (!load_video) {
         LOG(INFO) << "Ignore empty frames from camera.";
@@ -107,40 +149,59 @@ absl::Status RunMPPGraph() {
     }
     cv::Mat camera_frame;
     cv::cvtColor(camera_frame_raw, camera_frame, cv::COLOR_BGR2RGBA);
+    LOG(INFO) << "is video loaded?";
     if (!load_video) {
+      LOG(INFO) << "I think video is not loaded";
       cv::flip(camera_frame, camera_frame, /*flipcode=HORIZONTAL*/ 1);
     }
-
+    LOG(INFO) << "Wrap Mat into an ImageFrame.";
     // Wrap Mat into an ImageFrame.
     auto input_frame = absl::make_unique<mediapipe::ImageFrame>(
         mediapipe::ImageFormat::SRGBA, camera_frame.cols, camera_frame.rows,
         mediapipe::ImageFrame::kGlDefaultAlignmentBoundary);
     cv::Mat input_frame_mat = mediapipe::formats::MatView(input_frame.get());
     camera_frame.copyTo(input_frame_mat);
-
+    LOG(INFO) << "Prepare and add graph input packet.";
     // Prepare and add graph input packet.
     size_t frame_timestamp_us =
         (double)cv::getTickCount() / (double)cv::getTickFrequency() * 1e6;
     MP_RETURN_IF_ERROR(
         gpu_helper.RunInGlContext([&input_frame, &frame_timestamp_us, &graph,
-                                   &gpu_helper]() -> absl::Status {
+                                   &gpu_helper]() -> absl::Status { 
           // Convert ImageFrame to GpuBuffer.
+          LOG(INFO) << "Convert ImageFrame to GpuBuffer.";
           auto texture = gpu_helper.CreateSourceTexture(*input_frame.get());
           auto gpu_frame = texture.GetFrame<mediapipe::GpuBuffer>();
+          LOG(INFO) << "calling glFlush...";
           glFlush();
           texture.Release();
+          LOG(INFO) << "Send GPU image packet into the graph.";
           // Send GPU image packet into the graph.
           MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
               kInputStream, mediapipe::Adopt(gpu_frame.release())
                                 .At(mediapipe::Timestamp(frame_timestamp_us))));
+          // MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
+          //     faceDetFlag, mediapipe::Adopt(new bool(true))
+          //                       .At(mediapipe::Timestamp(frame_timestamp_us))));
+          // MP_RETURN_IF_ERROR(graph.AddPacketToInputStream(
+          //     "selected_effect_id", mediapipe::Adopt(new int(2))
+          //                       .At(mediapipe::Timestamp(frame_timestamp_us))));
           return absl::OkStatus();
         }));
-
+    LOG(INFO) << "Get the graph result packet, or stop if that fails.";
     // Get the graph result packet, or stop if that fails.
     mediapipe::Packet packet;
-    if (!poller.Next(&packet)) break;
+    LOG(INFO) << "A packet is created.";
+    bool res = poller.Next(&packet);
+    LOG(INFO) << "poller call result: " << res;
+    if (!res) {
+      LOG(INFO) << "poller.Next(&packet) is called. &packet: " << &packet;
+      break;
+      }
+    LOG(INFO) << "poller.Next(&packet) call didn't fail...";
     std::unique_ptr<mediapipe::ImageFrame> output_frame;
 
+    LOG(INFO) << "Convert GpuBuffer to ImageFrame."; 
     // Convert GpuBuffer to ImageFrame.
     MP_RETURN_IF_ERROR(gpu_helper.RunInGlContext(
         [&packet, &output_frame, &gpu_helper]() -> absl::Status {
@@ -159,7 +220,7 @@ absl::Status RunMPPGraph() {
           texture.Release();
           return absl::OkStatus();
         }));
-
+    LOG(INFO) << "Convert back to opencv for display or saving.";
     // Convert back to opencv for display or saving.
     cv::Mat output_frame_mat = mediapipe::formats::MatView(output_frame.get());
     if (output_frame_mat.channels() == 4)

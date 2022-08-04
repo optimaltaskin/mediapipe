@@ -1,0 +1,21 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/local/include",
+                "/usr/local/include/opencv4",
+                "/usr/local/cuda-11.3/targets/x86_64-linux/include/cuda/std/detail/libcxx/include",
+                "/home/patroclos/.cache/bazel/_bazel_patroclos/b83d432021aaf041dfc4aca29c4f0865/external/com_google_absl",
+                "/usr/include",
+                "${default}"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "gnu17",
+            "cppStandard": "gnu++14",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}
